@@ -23,6 +23,16 @@ def init_db():
             created_at TEXT
         )
     """)
+
+    # 2. 加上這段：建立 orders 訂單表格（為了取消訂單功能）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item TEXT NOT NULL,
+            status TEXT DEFAULT '訂單成立'
+        )
+    """)
+
   conn.commit()
   conn.close()
 
@@ -87,3 +97,24 @@ def create_menu_item(item: MenuItemCreate):
           "created_at": created_at,
       },
   }
+
+# --- 3. DELETE 路由：取消訂單 ---
+@app.delete("/orders/{order_id}")
+def cancel_order(order_id: int):
+    conn = sqlite3.connect("shop.db")
+    cursor = conn.cursor()
+    
+    # 檢查該筆訂單是否存在
+    cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+    order = cursor.fetchone()
+    
+    if not order:
+        conn.close()
+        raise HTTPException(status_code=404, detail="找不到指定的訂單")
+    
+    # 執行刪除
+    cursor.execute("DELETE FROM orders WHERE id = ?", (order_id,))
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True, "message": f"成功取消訂單編號 {order_id}"}
