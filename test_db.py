@@ -57,3 +57,33 @@ def init_database():
 
 if __name__ == "__main__":
     init_database()
+
+from fastapi.testclient import TestClient
+from main import app
+import sqlite3
+
+client = TestClient(app)
+
+def test_cancel_order_success():
+    # 1. 先在測試資料庫塞一筆臨時訂單，確保有 ID 可以刪除
+    conn = sqlite3.connect("shop.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO orders (item, status) VALUES (?, ?)", ("測試牛肉麵", "訂單成立"))
+    conn.commit()
+    test_id = cursor.lastrowid
+    conn.close()
+
+    # 2. 測試發送 DELETE 請求取消訂單
+    response = client.delete(f"/orders/{test_id}")
+    
+    # 3. 驗證結果是否正確
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert f"成功取消訂單編號 {test_id}" in data["message"]
+
+def test_cancel_order_not_found():
+    # 測試刪除一筆根本不存在的訂單編號（例如 99999），應該要回傳 404 錯誤
+    response = client.delete("/orders/99999")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "找不到指定的訂單"
